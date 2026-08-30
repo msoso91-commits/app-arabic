@@ -40,11 +40,17 @@ router.post("/analyze", requireAuth, async (req, res) => {
   }
 
   try {
-    const usedToday = await checkAndIncrementQuota(req.userId);
-    if (usedToday > DAILY_LIMIT) {
-      return res.status(429).json({
-        error: `Limite de ${DAILY_LIMIT} analyses par jour atteinte. Réessaie demain.`,
-      });
+    const userResult = await pool.query("SELECT subscription_status FROM users WHERE id = $1", [req.userId]);
+    const isSubscribed = userResult.rows[0]?.subscription_status === "active";
+    let usedToday = 0;
+
+    if (!isSubscribed) {
+      usedToday = await checkAndIncrementQuota(req.userId);
+      if (usedToday > DAILY_LIMIT) {
+        return res.status(429).json({
+          error: `Limite de ${DAILY_LIMIT} analyses par jour atteinte. Passe à l'abonnement pour un usage illimité, ou réessaie demain.`,
+        });
+      }
     }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -90,7 +96,10 @@ router.post("/analyze", requireAuth, async (req, res) => {
       [req.userId, JSON.stringify(parsed.verbes || []), JSON.stringify(parsed.noms || [])]
     );
 
-    res.json({ page: saved.rows[0], remainingToday: Math.max(0, DAILY_LIMIT - usedToday) });
+    res.json({
+      page: saved.rows[0],
+      remainingToday: isSubscribed ? null : Math.max(0, DAILY_LIMIT - usedToday),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erreur serveur pendant l'analyse." });

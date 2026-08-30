@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
+  stripe_customer_id TEXT,
+  subscription_status TEXT NOT NULL DEFAULT 'free', -- 'free' | 'active' | 'canceled'
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
