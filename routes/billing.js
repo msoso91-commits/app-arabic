@@ -26,6 +26,7 @@ router.post("/create-checkout-session", requireAuth, async (req, res) => {
       customer: customerId,
       mode: "subscription",
       line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+      managed_payments: { enabled: false },
       success_url: `${process.env.FRONTEND_URL}?subscription=success`,
       cancel_url: `${process.env.FRONTEND_URL}?subscription=cancelled`,
     });
@@ -34,6 +35,25 @@ router.post("/create-checkout-session", requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Impossible de créer la session de paiement." });
+  }
+});
+
+// Ouvre le portail client Stripe (gérer le moyen de paiement, résilier l'abonnement, voir les factures)
+router.post("/create-portal-session", requireAuth, async (req, res) => {
+  try {
+    const userResult = await pool.query("SELECT stripe_customer_id FROM users WHERE id = $1", [req.userId]);
+    const customerId = userResult.rows[0]?.stripe_customer_id;
+    if (!customerId) return res.status(400).json({ error: "Aucun abonnement associé à ce compte." });
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: process.env.FRONTEND_URL,
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Impossible d'ouvrir la gestion d'abonnement." });
   }
 });
 
