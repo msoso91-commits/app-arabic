@@ -7,7 +7,7 @@ const router = express.Router();
 // Nombre d'analyses gratuites par jour et par utilisateur.
 // Important tant que le modèle économique repose sur la publicité :
 // chaque analyse a un coût d'API réel, il faut donc une limite.
-const DAILY_LIMIT = 20;
+const DAILY_LIMIT = 3;
 
 const ANALYSIS_PROMPT =
   "Tu es un expert en grammaire arabe. Lis le texte arabe visible sur cette image de page de livre. " +
