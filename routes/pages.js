@@ -18,6 +18,7 @@ const ANALYSIS_PROMPT =
   "et une traduction française courte (1 à 3 mots) du verbe à l'infinitif. " +
   "Pour chaque nom donne : le mot, un synonyme, un contraire (ou vide si non pertinent), le pluriel, " +
   "et une traduction française courte (1 à 3 mots). " +
+  "Pour chaque verbe, reste cohérent sur le schème verbal (la forme dérivée : I, II, III, IV...) : si le verbe existe sous plusieurs formes proches avec un sens similaire, choisis-en UNE SEULE et utilise-la pour le passé, le présent, l'impératif ET le masdar — ne mélange jamais deux formes différentes dans la même ligne. " +
   "Si tu n'es pas sûr d'une forme, indique '?' plutôt que d'inventer. Reste très concis, pas de commentaire. " +
   "Réponds UNIQUEMENT avec un objet JSON strict compact, sans texte avant/après, sans balises markdown, au format exact: " +
   '{"verbes":[{"mot":"","passe":"","present":"","imperatif":"","masdar":"","traduction":""}],"noms":[{"mot":"","synonyme":"","contraire":"","pluriel":"","traduction":""}]}';
@@ -92,7 +93,7 @@ router.post("/analyze", requireAuth, async (req, res) => {
     }
 
     const saved = await pool.query(
-      "INSERT INTO pages (user_id, verbes, noms) VALUES ($1, $2, $3) RETURNING id, verbes, noms, created_at",
+      "INSERT INTO pages (user_id, verbes, noms) VALUES ($1, $2, $3) RETURNING id, titre, verbes, noms, created_at",
       [req.userId, JSON.stringify(parsed.verbes || []), JSON.stringify(parsed.noms || [])]
     );
 
@@ -109,10 +110,29 @@ router.post("/analyze", requireAuth, async (req, res) => {
 router.get("/", requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, verbes, noms, created_at FROM pages WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100",
+      "SELECT id, titre, verbes, noms, created_at FROM pages WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100",
       [req.userId]
     );
     res.json({ pages: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+// Renomme une page sauvegardée.
+router.patch("/:id", requireAuth, async (req, res) => {
+  const { titre } = req.body || {};
+  if (typeof titre !== "string") {
+    return res.status(400).json({ error: "Titre invalide." });
+  }
+  try {
+    const result = await pool.query(
+      "UPDATE pages SET titre = $1 WHERE id = $2 AND user_id = $3 RETURNING id, titre",
+      [titre.trim().slice(0, 100), req.params.id, req.userId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Page introuvable." });
+    res.json({ page: result.rows[0] });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erreur serveur." });
