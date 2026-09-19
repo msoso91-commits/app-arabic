@@ -2,11 +2,13 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const Stripe = require("stripe");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { sendPasswordResetEmail } = require("../mailer");
 
 const router = express.Router();
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -156,6 +158,34 @@ router.post("/reset-password", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+// Suppression définitive du compte (RGPD). Annule d'abord tout abonnement
+// Stripe actif pour éviter un prélèvement après la suppression.
+router.delete("/account", requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query("SELECT stripe_customer_id FROM users WHERE id = $1", [req.userId]);
+    const customerId = result.rows[0]?.stripe_customer_id;
+
+    if (customerId) {
+      try {
+        const subs = await stripe.subscriptions.list({ customer: customerId, status: "active" });
+        for (const sub of subs.data) {
+          await stripe.subscriptions.cancel(sub.id);
+        }
+      } catch (err) {
+        console.error("Erreur annulation abonnement Stripe lors de la suppression:", err);
+      }
+    }
+
+    // Les pages et l'historique d'usage sont supprimés automatiquement
+    // (ON DELETE CASCADE défini dans le schéma).
+    await pool.query("DELETE FROM users WHERE id = $1", [req.userId]);
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur lors de la suppression du compte." });
   }
 });
 
