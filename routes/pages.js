@@ -149,4 +149,22 @@ router.delete("/:id", requireAuth, async (req, res) => {
   }
 });
 
+// Signale une ligne (verbe ou nom) comme incorrecte, pour amélioration continue.
+router.post("/report-error", requireAuth, async (req, res) => {
+  const { wordType, row } = req.body || {};
+  if (!wordType || !row) return res.status(400).json({ error: "Données de signalement invalides." });
+
+  try {
+    await pool.query("INSERT INTO reported_errors (user_id, word_type, row_data) VALUES ($1, $2, $3)", [
+      req.userId,
+      wordType,
+      JSON.stringify(row),
+    ]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 module.exports = router;
