@@ -5,6 +5,7 @@ const cors = require("cors");
 const authRoutes = require("./routes/auth");
 const pagesRoutes = require("./routes/pages");
 const billingRoutes = require("./routes/billing");
+const adminRoutes = require("./routes/admin");
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/pages", pagesRoutes);
 app.use("/api/billing", billingRoutes);
+app.use("/api/admin", adminRoutes);
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT}`));
