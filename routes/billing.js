@@ -27,6 +27,7 @@ router.post("/create-checkout-session", requireAuth, async (req, res) => {
       mode: "subscription",
       line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
       managed_payments: { enabled: false },
+      allow_promotion_codes: true, // affiche le champ "Code promo" sur la page de paiement
       success_url: `${process.env.FRONTEND_URL}?subscription=success`,
       cancel_url: `${process.env.FRONTEND_URL}?subscription=cancelled`,
     });
