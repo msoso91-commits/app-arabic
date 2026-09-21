@@ -167,4 +167,57 @@ router.post("/report-error", requireAuth, async (req, res) => {
   }
 });
 
+// Récupère le statut de révision de chaque mot d'une page pour l'utilisateur connecté.
+router.get("/:id/review", requireAuth, async (req, res) => {
+  try {
+    const pageResult = await pool.query("SELECT id, verbes, noms FROM pages WHERE id = $1 AND user_id = $2", [
+      req.params.id,
+      req.userId,
+    ]);
+    const page = pageResult.rows[0];
+    if (!page) return res.status(404).json({ error: "Page introuvable." });
+
+    const reviewsResult = await pool.query(
+      "SELECT word_type, mot, status FROM word_reviews WHERE user_id = $1 AND page_id = $2",
+      [req.userId, req.params.id]
+    );
+    const statusMap = {};
+    reviewsResult.rows.forEach((r) => {
+      statusMap[`${r.word_type}:${r.mot}`] = r.status;
+    });
+
+    const withStatus = (rows, type) =>
+      (rows || []).map((row) => ({ ...row, status: statusMap[`${type}:${row.mot}`] || "nouveau" }));
+
+    res.json({
+      verbes: withStatus(page.verbes, "verbe"),
+      noms: withStatus(page.noms, "nom"),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+// Enregistre le statut de révision d'un mot (maîtrisé / à revoir).
+router.post("/:id/review", requireAuth, async (req, res) => {
+  const { wordType, mot, status } = req.body || {};
+  if (!wordType || !mot || !["maitrise", "a_revoir", "nouveau"].includes(status)) {
+    return res.status(400).json({ error: "Données de révision invalides." });
+  }
+  try {
+    await pool.query(
+      `INSERT INTO word_reviews (user_id, page_id, word_type, mot, status, updated_at)
+       VALUES ($1, $2, $3, $4, $5, now())
+       ON CONFLICT (user_id, page_id, word_type, mot)
+       DO UPDATE SET status = $5, updated_at = now()`,
+      [req.userId, req.params.id, wordType, mot, status]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 module.exports = router;
